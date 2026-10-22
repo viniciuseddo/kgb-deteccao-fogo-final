@@ -1,0 +1,17 @@
+venv/
+__pycache__/
+*.pyc
+dados/
+disparos/
+dataset/
+amostras/
+tomadas/
+capturas/
+*.db
+*.db-journal
+*.mp4
+*.onnx
+yolov8n.pt
+modelos/best.pt
+modelos/.cache/
+.vscode/
