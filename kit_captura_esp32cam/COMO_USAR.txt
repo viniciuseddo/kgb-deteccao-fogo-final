@@ -1,0 +1,66 @@
+======================================================================
+🔥 GUIA RÁPIDO DE USO - KIT DE CAPTURA ESP32-CAM 🔥
+======================================================================
+
+Este kit foi preparado para você gravar vídeos e fotos de chamas/fogo
+usando a câmera ESP32-CAM de forma simples e rápida, mesmo em outro computador
+ou em outra rede Wi-Fi!
+
+----------------------------------------------------------------------
+PRIMEIRO PASSO (Apenas na 1ª vez que for usar):
+----------------------------------------------------------------------
+1. Certifique-se de ter o Python instalado no seu computador.
+2. Dê 2 cliques no arquivo:
+   👉 1_INSTALAR_DEPENDENCIAS.bat
+   Ele vai instalar automaticamente as bibliotecas necessárias.
+
+----------------------------------------------------------------------
+SEGUNDO PASSO - COMO LIGAR E GRAVAR:
+----------------------------------------------------------------------
+Dê 2 cliques no arquivo:
+👉 INICIAR_CAPTURA.bat
+
+O navegador abrirá automaticamente no endereço:
+http://localhost:5005
+
+Você tem duas formas de conectar a câmera na tela:
+
+OPÇÃO 1: POR CABO USB (Recomendado - Mais estável e direto)
+  1. Conecte o ESP32-CAM na porta USB do seu computador.
+  2. Na tela do navegador, na aba "🔌 Cabo USB", selecione a sua porta COM (ex: COM3, COM4...).
+  3. Clique em "Conectar via USB".
+  4. O vídeo da câmera aparecerá ao vivo!
+
+OPÇÃO 2: POR WI-FI (Sem fios)
+  1. Ligue o ESP32-CAM em qualquer carregador de celular ou powerbank.
+  2. No seu computador (ou celular), procure as redes Wi-Fi e conecte na rede:
+     Nome da Rede: ESP32CAM-FOGO
+     Senha:        12345678
+  3. No aplicativo, na aba "📶 Wi-Fi (Rede)", clique em "Conectar via Wi-Fi".
+     (A URL padrão é http://192.168.4.1/stream).
+
+----------------------------------------------------------------------
+TERCEIRO PASSO - DICAS PARA UMA BOA GRAVAÇÃO:
+----------------------------------------------------------------------
+Para o modelo de inteligência artificial aprender perfeitamente:
+1. Faça vídeos curtos de 15 a 45 segundos cada (clique no botão vermelho "Iniciar Gravação").
+2. Grave o isqueiro / chama em diferentes distâncias:
+   - Perto (close-up na chama);
+   - Média distância (30 a 60 cm);
+   - Mais longe (1 a 2 metros).
+3. Mostre o momento em que você acende a chama e quando você apaga.
+4. Mova suavemente o isqueiro para diferentes cantos do campo de visão da câmera.
+5. Grave também 1 ou 2 vídeos apenas do ambiente sem fogo (fundo vazio) para a IA aprender a não dar alarme falso.
+6. Se a imagem estiver deitada, use o botão "🔄 Rotacionar" na tela.
+
+----------------------------------------------------------------------
+QUARTO PASSO - COMO ENVIAR AS GRAVAÇÕES PARA O LUCAS:
+----------------------------------------------------------------------
+Quando terminar as gravações:
+1. Na tela do aplicativo, clique no botão verde:
+   📦 "Baixar Pacote .ZIP para Enviar"
+2. O navegador vai gerar um arquivo compactado com todos os vídeos e fotos.
+3. Basta enviar esse arquivo .ZIP para o Lucas por WhatsApp, Google Drive ou e-mail!
+
+(Você também pode clicar em "Abrir Pasta" para ver os arquivos .mp4 salvos na pasta 'capturas/videos').
+======================================================================

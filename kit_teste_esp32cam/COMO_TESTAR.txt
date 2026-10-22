@@ -1,0 +1,49 @@
+======================================================================
+🔥 GUIA RÁPIDO: COMO TESTAR O MODELO DE FOGO NA SUA ESP32-CAM 🔥
+======================================================================
+
+Este kit permite testar em tempo real o modelo de Inteligência Artificial
+(YOLO11) treinado para detecção e rastreamento de chamas e fogo, usando
+a sua câmera ESP32-CAM conectada na porta USB do computador.
+
+----------------------------------------------------------------------
+PASSO 1 - INSTALAR DEPENDÊNCIAS (Apenas na 1ª vez):
+----------------------------------------------------------------------
+1. Certifique-se de ter o Python instalado no seu computador.
+2. Dê 2 cliques em:
+   👉 1_INSTALAR_DEPENDENCIAS.bat
+   (Aguarde o término da instalação e pressione qualquer tecla).
+
+----------------------------------------------------------------------
+PASSO 2 - CONECTAR A ESP32-CAM:
+----------------------------------------------------------------------
+1. Conecte a placa ESP32-CAM na porta USB do seu computador com o cabo de dados.
+2. Dê 2 cliques em:
+   👉 INICIAR_TESTE_AO_VIVO.bat
+
+O programa vai:
+- Detectar automaticamente a sua porta USB (ex: COM3, COM4, COM13);
+- Carregar o modelo de Inteligência Artificial treinado;
+- Abrir a janela de vídeo ao vivo com rastreamento instantâneo!
+
+----------------------------------------------------------------------
+PASSO 3 - COMO TESTAR COM FOGO:
+----------------------------------------------------------------------
+1. Acenda um isqueiro, vela ou fósforo na frente da câmera.
+2. O sistema desenhará uma caixa vermelha/laranja ao redor da chama:
+   - Exibe a certeza da IA (ex: CHAMA: 85%);
+   - A barra superior muda para: 🔴 "ALERTA: CHAMA DETECTADA!";
+   - Emite um bipe sonoro de alerta.
+3. Quando a chama apagar, a barra volta imediatamente para:
+   - 🟢 "STATUS: SEGURO (Nenhuma chama identificada)".
+
+----------------------------------------------------------------------
+ATALHOS ÚTEIS NO TECLADO (Na janela de vídeo):
+----------------------------------------------------------------------
+- [R]       : Rotaciona a câmera (caso a imagem esteja deitada ou invertida).
+- [+] ou [↑]: Aumenta o limiar de certeza (ex: de 40% para 60% se quiser menos sensível).
+- [-] ou [↓]: Diminui o limiar de certeza (para pegar chamas bem pequenas ou fracas).
+- [L]       : Liga/desliga o LED flash da câmera.
+- [S]       : Salva um print/foto da tela com a detecção de chama.
+- [Q] ou ESC: Fecha a janela e encerra o teste.
+======================================================================
