@@ -10,7 +10,9 @@ rem  cada uma tem chama. Nao dispara nada e nao grava nada.
 rem  Use para escolher qual gravacao usar no video.
 rem ==============================================================
 
-set PROJ=C:\projetos\deteccao-fogo
+set PROJ=%~dp0
+if "%PROJ:~-1%"=="\" set PROJ=%PROJ:~0,-1%
+if not exist "%PROJ%\venv\Scripts\python.exe" set PROJ=C:\projetos\deteccao-fogo
 set PY=%PROJ%\venv\Scripts\python.exe
 
 echo ======================================================================

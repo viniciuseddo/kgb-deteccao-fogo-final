@@ -238,7 +238,7 @@ def main():
     p.add_argument("--ip", required=True, help="IP do ESP32-S3 na rede")
     p.add_argument("--porta", default=None, help="COM da ESP32-CAM (auto se omitir)")
     p.add_argument("--modelo", default=MODELO_PADRAO)
-    p.add_argument("--conf", type=float, default=0.45)
+    p.add_argument("--conf", "--con", type=float, default=0.45)
     p.add_argument("--imgsz", type=int, default=640)
     p.add_argument("--frames", type=int, default=3, help="quadros seguidos para confirmar")
     p.add_argument("--cooldown", type=float, default=12.0, help="segundos entre disparos")
@@ -247,6 +247,13 @@ def main():
                    help="segundos que a bomba fica ligada, so para registro")
     p.add_argument("--salvar", action="store_true",
                    help="mantido por compatibilidade, a evidencia ja e sempre salva")
+    p.add_argument("--controle-dualsense", action="store_true",
+                   help="opcional: DualSense USB + protocolo protegido (exige a variante "
+                        "esp32s3_vigia_dualsense e requirements-dualsense.txt)")
+    p.add_argument("--log-controle", default=None,
+                   help="JSONL de comandos do controle (padrao dados/comandos_controle.jsonl)")
+    p.add_argument("--banco", default=None,
+                   help="caminho alternativo do banco SQLite (padrao dados/deteccoes.db)")
     args = p.parse_args()
 
     print("=" * 64)
@@ -262,9 +269,14 @@ def main():
     nomes = modelo.names
     print(f"[modelo] classes: {nomes}")
 
-    bd = Banco()
+    bd = Banco(args.banco) if args.banco else Banco()
     bd.abrir_sessao(os.path.basename(args.modelo), args.conf, args.ip)
     print(f"[banco] {bd.caminho}")
+
+    if args.controle_dualsense:
+        # Caminho novo opt-in; o laco abaixo (original) nao e usado.
+        from controle_dualsense.vigia_integracao import executar
+        return executar(args, modelo, bd, BASE, achar_porta_camera)
 
     s3 = ControleS3(args.ip)
     print(f"[s3] testando http://{args.ip}/status ...")

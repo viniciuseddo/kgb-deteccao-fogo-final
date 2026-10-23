@@ -1,0 +1,584 @@
+{
+  "versao_contrato": 1,
+  "descricao": "Vetores compartilhados Python/C++ do protocolo protegido (design R2 §3-§5). Tempo t em ms desde o boot simulado. Ver LEIAME.md.",
+  "constantes": {
+    "v": 1,
+    "caps": ["pan_manual", "watchdog", "bomba_protegida", "cancelar_sem_modo", "idempotencia"],
+    "prazo_agua_ms": 5000,
+    "cooldown_ms": 12000,
+    "inibicao_boot_ms": 12000,
+    "inibicao_cancel_ms": 12000,
+    "lease_ms": 1500,
+    "janela_ms": 500,
+    "vel_validade_ms": 500,
+    "vel_max_dps": 30,
+    "pan_min": 10,
+    "pan_max": 170,
+    "varre_min": 30,
+    "varre_max": 150,
+    "dedup_retencao_ms": 120000,
+    "dedup_capacidade": 32
+  },
+  "esquema_comando": {
+    "comuns_obrigatorios": ["v", "boot_id", "sessao", "acao"],
+    "por_acao": {
+      "consultar": {"obrigatorios": ["ref"], "opcionais": []},
+      "janela": {"obrigatorios": [], "opcionais": []},
+      "manual": {"obrigatorios": ["seq", "id", "janela"], "opcionais": []},
+      "auto": {"obrigatorios": ["seq", "id", "janela"], "opcionais": []},
+      "renovar": {"obrigatorios": ["seq", "id", "janela"], "opcionais": []},
+      "mover": {"obrigatorios": ["seq", "id", "janela", "vel"], "opcionais": []},
+      "disparar": {"obrigatorios": ["seq", "id", "janela", "origem"], "opcionais": []},
+      "cancelar": {"obrigatorios": ["seq", "id", "janela"], "um_de": ["cancel_ate", "alvo"]}
+    },
+    "origens": ["ia", "operador", "teclado"],
+    "id_regex": "^[A-Za-z0-9_-]{1,32}$",
+    "seq_max": 2147483647,
+    "corpo_max_bytes": 512
+  },
+  "esquema_sessao": {"obrigatorios": ["v", "boot_id", "session_open_id", "janela"]},
+  "motivos": [
+    "json_invalido", "campo_desconhecido", "campo_ausente", "tipo_invalido", "valor_invalido",
+    "versao", "boot", "sem_sessao", "sessao_obsoleta", "seq_antiga", "id_conflito",
+    "janela_expirada", "janela_invalida", "epoch_obsoleto", "escopo",
+    "acao_desconhecida", "recuperacao", "modo_auto", "sem_lease", "combate", "ocupado",
+    "cooldown", "protecao_indisponivel", "alvo_obsoleto", "agua_legada_ativa", "perfil_protegido"
+  ],
+  "cenarios": [
+    {
+      "nome": "status_legado_e_capacidades",
+      "requisito": "arbitration: Negociação de capacidades; status preserva pan/vigiando/fogo/bomba",
+      "passos": [
+        {"t": 0, "rota": "status", "espera": {
+          "http": 200, "pan": 90, "vigiando": true, "fogo": false, "bomba": false,
+          "v": 1, "caps": ["pan_manual", "watchdog", "bomba_protegida", "cancelar_sem_modo", "idempotencia"],
+          "perfil": "COMPAT", "modo": "AUTO", "fase": "OCIOSA", "sessao": {"$nulo": true},
+          "protecao_ok": true, "janela_abertura": {"$naonulo": true},
+          "limites.prazo_agua_ms": 5000, "limites.cooldown_ms": 12000, "limites.lease_ms": 1500,
+          "limites.janela_ms": 500, "limites.vel_max_dps": 30, "limites.inibicao_boot_ms": 12000,
+          "cooldown_restante_ms": 12000, "d.rele": false}},
+        {"t": 10, "rota": "status", "espera": {"pan": 91, "vigiando": true, "cooldown_restante_ms": 11990}}
+      ]
+    },
+    {
+      "nome": "abertura_basica_fixa_perfil_protegido",
+      "requisito": "arbitration: Abertura idempotente; sessão nova sem ação inicia AUTO desarmado; perfil PROTEGIDO",
+      "passos": [
+        {"t": 100, "macro": "abrir", "sess": "S1", "espera": {"resultado": "aceito", "estado_sessao": "NORMAL",
+          "estado.modo": "AUTO", "estado.perfil": "PROTEGIDO", "sessao": {"$naonulo": true},
+          "janela_c": {"$naonulo": true}, "janela_x": {"$naonulo": true}, "janela_r": {"$nulo": true},
+          "duplicado": false}},
+        {"t": 110, "rota": "status", "espera": {"perfil": "PROTEGIDO", "sessao": "$S1", "estado_sessao": "NORMAL"}}
+      ]
+    },
+    {
+      "nome": "abertura_repetida_mesmo_id",
+      "requisito": "arbitration: Resposta do handshake se perde -> mesma decisão sem novo takeover",
+      "passos": [
+        {"t": 100, "macro": "abrir", "sess": "S1", "open_id": "abre-1"},
+        {"t": 120, "repetir_passo": 0, "espera": {"resultado": "aceito", "duplicado": true, "sessao": "$S1", "sessao_vigente": true}},
+        {"t": 900, "repetir_passo": 0, "espera": {"resultado": "aceito", "duplicado": true, "sessao": "$S1"}},
+        {"t": 910, "macro": "janela", "sess": "S1", "espera": {"resultado": "aceito"}},
+        {"t": 920, "rota": "status", "espera": {"sessao": "$S1"}}
+      ]
+    },
+    {
+      "nome": "abertura_mesmo_id_payload_diferente",
+      "requisito": "design §5: session_open_id repetido com payload divergente é erro",
+      "passos": [
+        {"t": 100, "macro": "abrir", "sess": "S1", "open_id": "abre-1"},
+        {"t": 150, "macro": "abrir", "sess": "S1b", "open_id": "abre-1", "espera": {"resultado": "recusado", "motivo": "id_conflito"}},
+        {"t": 160, "rota": "status", "espera": {"sessao": "$S1"}}
+      ]
+    },
+    {
+      "nome": "abertura_atrasada_expirada",
+      "requisito": "arbitration: Boot/janela de abertura expirados rejeitados; abertura antiga nunca troca a sessão",
+      "passos": [
+        {"t": 100, "rota": "status", "capturar": {"ja_velha": "janela_abertura", "boot": "boot_id"}},
+        {"t": 650, "rota": "sessao", "corpo": {"v": 1, "boot_id": "$boot", "session_open_id": "atrasada", "janela": "$ja_velha"},
+          "espera": {"http": 409, "resultado": "recusado", "motivo": "janela_expirada"}},
+        {"t": 660, "rota": "status", "espera": {"sessao": {"$nulo": true}, "perfil": "COMPAT"}}
+      ]
+    },
+    {
+      "nome": "abertura_boot_errado_e_versao",
+      "requisito": "arbitration: pacote de boot anterior rejeitado; versão incompatível",
+      "passos": [
+        {"t": 100, "rota": "status", "capturar": {"ja": "janela_abertura", "boot": "boot_id"}},
+        {"t": 110, "rota": "sessao", "corpo": {"v": 1, "boot_id": "00000000", "session_open_id": "b1", "janela": "$ja"},
+          "espera": {"resultado": "recusado", "motivo": "boot"}},
+        {"t": 120, "rota": "sessao", "corpo": {"v": 2, "boot_id": "$boot", "session_open_id": "b2", "janela": "$ja"},
+          "espera": {"resultado": "recusado", "motivo": "versao"}},
+        {"t": 130, "rota": "sessao", "corpo": {"v": 1, "boot_id": "$boot", "session_open_id": "b3", "janela": "C0.100.00000000"},
+          "espera": {"resultado": "recusado", "motivo": "escopo"}},
+        {"t": 140, "rota": "sessao", "corpo": {"v": 1, "boot_id": "$boot", "session_open_id": "b4", "janela": "A0.100.deadbeef"},
+          "espera": {"resultado": "recusado", "motivo": "janela_invalida"}},
+        {"t": 150, "rota": "status", "espera": {"sessao": {"$nulo": true}, "perfil": "COMPAT"}}
+      ]
+    },
+    {
+      "nome": "abertura_substitui_sessao_sem_acao",
+      "requisito": "design §5 lifecycle (a): abertura nova invalida a anterior, põe AUTO, não restaura manual",
+      "passos": [
+        {"t": 100, "macro": "abrir", "sess": "S1", "open_id": "o1"},
+        {"t": 200, "rota": "comando", "sess": "S1", "corpo": {"acao": "manual", "janela": "$S1_jc"}, "espera": {"resultado": "aceito", "estado.modo": "MANUAL"}},
+        {"t": 400, "macro": "abrir", "sess": "S2", "open_id": "o2", "espera": {"resultado": "aceito", "estado_sessao": "NORMAL", "estado.modo": "AUTO", "sessao": {"$dif": "$S1"}}},
+        {"t": 410, "macro": "janela", "sess": "S1", "espera": {"resultado": "recusado", "motivo": "sessao_obsoleta"}},
+        {"t": 420, "rota": "comando", "sess": "S1", "corpo": {"acao": "renovar", "janela": "$S1_jc"}, "espera": {"resultado": "recusado", "motivo": "sessao_obsoleta"}},
+        {"t": 430, "repetir_passo": 0, "espera": {"resultado": "aceito", "duplicado": true, "sessao": "$S1", "sessao_vigente": false}},
+        {"t": 440, "rota": "status", "espera": {"sessao": "$S2", "modo": "AUTO", "vigiando": true}}
+      ]
+    },
+    {
+      "nome": "manual_neutro_persiste_alem_de_8s",
+      "requisito": "arbitration: Neutro manual além de oito segundos mantém ângulo",
+      "passos": [
+        {"t": 100, "macro": "abrir", "sess": "S1"},
+        {"t": 200, "rota": "comando", "sess": "S1", "corpo": {"acao": "manual", "janela": "$S1_jc"}, "capturar": {"pan0": "estado.pan"}, "espera": {"resultado": "aceito", "estado.vigiando": false}},
+        {"rota": "comando", "sess": "S1", "corpo": {"acao": "renovar", "janela": "$S1_jc"}, "repetir": {"de": 450, "ate": 9200, "passo": 250}, "espera": {"resultado": "aceito"}},
+        {"t": 9300, "rota": "status", "espera": {"modo": "MANUAL", "vigiando": false, "pan": "$pan0"}}
+      ]
+    },
+    {
+      "nome": "lease_expira_sem_renovacao_e_consulta_nao_renova",
+      "requisito": "arbitration: Lease local 1500 ms; consulta de status/janela não renova",
+      "passos": [
+        {"t": 100, "macro": "abrir", "sess": "S1"},
+        {"t": 200, "rota": "comando", "sess": "S1", "corpo": {"acao": "manual", "janela": "$S1_jc"}, "espera": {"resultado": "aceito"}},
+        {"t": 900, "rota": "status"},
+        {"t": 1200, "macro": "janela", "sess": "S1", "espera": {"resultado": "aceito"}},
+        {"t": 1600, "rota": "status", "espera": {"modo": "MANUAL", "lease_restante_ms": 100}},
+        {"t": 1750, "rota": "status", "espera": {"modo": "AUTO", "vigiando": true, "lease_restante_ms": 0}}
+      ]
+    },
+    {
+      "nome": "renovacao_com_janela_expirada_nao_prolonga",
+      "requisito": "arbitration: renovação expirada no recebimento rejeitada sem prolongar lease",
+      "passos": [
+        {"t": 100, "macro": "abrir", "sess": "S1"},
+        {"t": 200, "rota": "comando", "sess": "S1", "corpo": {"acao": "manual", "janela": "$S1_jc"}, "capturar": {"jc_velho": "janela_c"}},
+        {"t": 701, "rota": "comando", "sess": "S1", "corpo": {"acao": "renovar", "janela": "$jc_velho"}, "espera": {"resultado": "recusado", "motivo": "janela_expirada"}},
+        {"t": 1750, "rota": "status", "espera": {"modo": "AUTO"}}
+      ]
+    },
+    {
+      "nome": "primeiro_pacote_da_sessao_atrasado",
+      "requisito": "arbitration: Primeiro pacote chega muito atrasado -> rejeitado mesmo sem sequência posterior",
+      "passos": [
+        {"t": 100, "macro": "abrir", "sess": "S1"},
+        {"t": 650, "rota": "comando", "sess": "S1", "corpo": {"acao": "manual", "janela": "$S1_jc"}, "espera": {"resultado": "recusado", "motivo": "janela_expirada", "estado.modo": "AUTO"}}
+      ]
+    },
+    {
+      "nome": "velocidade_expira_e_heartbeat_nao_prolonga",
+      "requisito": "arbitration: Heartbeat continua sem novos movimentos -> velocidade zera em 500 ms",
+      "passos": [
+        {"t": 100, "macro": "abrir", "sess": "S1"},
+        {"t": 200, "rota": "comando", "sess": "S1", "corpo": {"acao": "manual", "janela": "$S1_jc"}, "capturar": {"pan0": "estado.pan"}},
+        {"t": 300, "rota": "comando", "sess": "S1", "corpo": {"acao": "mover", "vel": 1.0, "janela": "$S1_jc"}, "espera": {"resultado": "aceito"}},
+        {"rota": "comando", "sess": "S1", "corpo": {"acao": "renovar", "janela": "$S1_jc"}, "repetir": {"de": 450, "ate": 1450, "passo": 250}},
+        {"t": 800, "rota": "status", "espera": {"pan": {"$soma": ["$pan0", 15]}}},
+        {"t": 1500, "rota": "status", "espera": {"modo": "MANUAL", "pan": {"$soma": ["$pan0", 15]}}}
+      ]
+    },
+    {
+      "nome": "velocidade_negativa_e_limite_pan",
+      "requisito": "arbitration: PAN permanece dentro dos limites configurados",
+      "passos": [
+        {"t": 100, "macro": "abrir", "sess": "S1"},
+        {"t": 200, "rota": "comando", "sess": "S1", "corpo": {"acao": "manual", "janela": "$S1_jc"}},
+        {"rota": "comando", "sess": "S1", "corpo": {"acao": "mover", "vel": -1.0, "janela": "$S1_jc"}, "repetir": {"de": 300, "ate": 4300, "passo": 200}},
+        {"rota": "comando", "sess": "S1", "corpo": {"acao": "renovar", "janela": "$S1_jc"}, "repetir": {"de": 350, "ate": 4350, "passo": 250}},
+        {"t": 4400, "rota": "status", "espera": {"pan": 10, "modo": "MANUAL"}}
+      ]
+    },
+    {
+      "nome": "retorno_gradual_de_fora_da_faixa",
+      "requisito": "arbitration: Retorno de posição fora da faixa de varredura sem salto",
+      "passos": [
+        {"t": 100, "macro": "abrir", "sess": "S1"},
+        {"t": 200, "rota": "comando", "sess": "S1", "corpo": {"acao": "manual", "janela": "$S1_jc"}},
+        {"rota": "comando", "sess": "S1", "corpo": {"acao": "mover", "vel": 1.0, "janela": "$S1_jc"}, "repetir": {"de": 300, "ate": 3300, "passo": 200}},
+        {"rota": "comando", "sess": "S1", "corpo": {"acao": "renovar", "janela": "$S1_jc"}, "repetir": {"de": 350, "ate": 3850, "passo": 250}},
+        {"t": 3900, "rota": "status", "espera": {"pan": 170}},
+        {"t": 3900, "rota": "comando", "sess": "S1", "corpo": {"acao": "auto", "janela": "$S1_jc"}, "espera": {"resultado": "aceito", "estado.modo": "AUTO"}},
+        {"t": 4000, "rota": "status", "espera": {"pan": 167, "vigiando": true}},
+        {"t": 4500, "rota": "status", "espera": {"pan": {"$entre": [151, 152]}}},
+        {"t": 4900, "rota": "status", "espera": {"pan": {"$entre": [120, 149]}}}
+      ]
+    },
+    {
+      "nome": "mover_e_quadrado_no_auto_recusados",
+      "requisito": "guarded-pump: Quadrado no automático recusado sem ligar água nem mudar modo",
+      "passos": [
+        {"t": 12100, "macro": "abrir", "sess": "S1"},
+        {"t": 12150, "rota": "comando", "sess": "S1", "corpo": {"acao": "mover", "vel": 0.5, "janela": "$S1_jc"}, "espera": {"resultado": "recusado", "motivo": "modo_auto"}},
+        {"t": 12200, "rota": "comando", "sess": "S1", "corpo": {"acao": "disparar", "origem": "operador", "janela": "$S1_jc"}, "espera": {"resultado": "recusado", "motivo": "modo_auto", "estado.modo": "AUTO", "estado.fase": "OCIOSA"}},
+        {"t": 12200, "rota": "comando", "sess": "S1", "corpo": {"acao": "disparar", "origem": "teclado", "janela": "$S1_jc"}, "espera": {"resultado": "recusado", "motivo": "modo_auto"}},
+        {"t": 12300, "rota": "avancar", "espera": {"d.rele": false, "d.rele_ligado_em": {"$nulo": true}}}
+      ]
+    },
+    {
+      "nome": "inibicao_de_boot",
+      "requisito": "guarded-pump: boot impõe 12000 ms de inibição inicial",
+      "passos": [
+        {"t": 100, "macro": "abrir", "sess": "S1"},
+        {"t": 5000, "macro": "janela", "sess": "S1"},
+        {"t": 5000, "rota": "comando", "sess": "S1", "corpo": {"acao": "disparar", "origem": "ia", "janela": "$S1_jc"}, "espera": {"resultado": "recusado", "motivo": "cooldown", "estado.cooldown_restante_ms": 7000}},
+        {"t": 12000, "macro": "janela", "sess": "S1"},
+        {"t": 12000, "rota": "comando", "sess": "S1", "corpo": {"acao": "disparar", "origem": "ia", "janela": "$S1_jc"}, "espera": {"resultado": "aceito", "estado.fase": "ACEITA_PENDENTE"}},
+        {"t": 12001, "rota": "avancar", "espera": {"d.rele": true, "d.rele_ligado_em": 12001}}
+      ]
+    },
+    {
+      "nome": "disparo_manual_prazo_sem_extensao_e_cooldown",
+      "requisito": "guarded-pump: prazo 5000 ms desde GPIO; repetição não prolonga; intervalo normal até t=12 s",
+      "passos": [
+        {"t": 12100, "macro": "abrir", "sess": "S1"},
+        {"t": 12150, "rota": "comando", "sess": "S1", "corpo": {"acao": "manual", "janela": "$S1_jc"}, "capturar": {"pan0": "estado.pan"}},
+        {"t": 12200, "rota": "comando", "sess": "S1", "corpo": {"id": "agua-1", "acao": "disparar", "origem": "operador", "janela": "$S1_jc"},
+          "espera": {"resultado": "aceito", "estado.fase": "ACEITA_PENDENTE", "estado.acao_id": "agua-1", "d.rele": false}},
+        {"t": 12201, "rota": "avancar", "espera": {"d.rele": true, "d.rele_ligado_em": 12201, "d.servo_solto": true}},
+        {"rota": "comando", "sess": "S1", "corpo": {"acao": "renovar", "janela": "$S1_jc"}, "repetir": {"de": 12400, "ate": 18900, "passo": 250}},
+        {"t": 13000, "rota": "status", "espera": {"fase": "ENERGIZADA", "bomba": true, "vigiando": false, "modo": "MANUAL"}},
+        {"t": 14000, "rota": "comando", "sess": "S1", "corpo": {"acao": "disparar", "origem": "operador", "janela": "$S1_jc"}, "espera": {"resultado": "recusado", "motivo": "ocupado"}},
+        {"t": 14001, "repetir_passo": 2, "espera": {"resultado": "aceito", "duplicado": true}},
+        {"t": 14002, "rota": "comando", "sess": "S1", "corpo": {"acao": "disparar", "origem": "ia", "janela": "$S1_jc"}, "espera": {"resultado": "recusado", "motivo": "ocupado"}},
+        {"t": 17200, "rota": "avancar", "espera": {"d.rele": true}},
+        {"t": 17201, "rota": "avancar", "espera": {"d.rele": false, "d.rele_desligado_em": 17201}},
+        {"t": 17202, "rota": "status", "espera": {"fase": "OCIOSA", "modo": "MANUAL", "pan": "$pan0", "ultimo.id": "agua-1", "ultimo.resultado": "concluida", "cooldown_restante_ms": 6999, "d.servo_solto": false}},
+        {"t": 19000, "rota": "status", "espera": {"modo": "MANUAL"}},
+        {"t": 24100, "macro": "janela", "sess": "S1"},
+        {"t": 24100, "rota": "comando", "sess": "S1", "corpo": {"acao": "disparar", "origem": "ia", "janela": "$S1_jc"}, "espera": {"resultado": "recusado", "motivo": "cooldown"}},
+        {"t": 24201, "macro": "janela", "sess": "S1"},
+        {"t": 24201, "rota": "comando", "sess": "S1", "corpo": {"acao": "disparar", "origem": "ia", "janela": "$S1_jc"}, "espera": {"resultado": "aceito"}}
+      ]
+    },
+    {
+      "nome": "cancelamento_no_manual_posterga_intervalo",
+      "requisito": "guarded-pump: Cancelar no manual mantém posição/MANUAL; cancelamento em t=2 s posterga para t=14 s",
+      "passos": [
+        {"t": 12100, "macro": "abrir", "sess": "S1"},
+        {"t": 12150, "rota": "comando", "sess": "S1", "corpo": {"acao": "manual", "janela": "$S1_jc"}, "capturar": {"pan0": "estado.pan"}},
+        {"t": 12200, "rota": "comando", "sess": "S1", "corpo": {"acao": "disparar", "origem": "operador", "janela": "$S1_jc"}, "espera": {"resultado": "aceito"}},
+        {"rota": "comando", "sess": "S1", "corpo": {"acao": "renovar", "janela": "$S1_jc"}, "repetir": {"de": 12400, "ate": 15400, "passo": 250}},
+        {"t": 14201, "macro": "janela", "sess": "S1"},
+        {"t": 14201, "rota": "comando", "sess": "S1", "corpo": {"acao": "cancelar", "cancel_ate": "$ultimo", "janela": "$S1_jx"},
+          "espera": {"resultado": "aceito", "estado.fase": "DESLIGAMENTO_PENDENTE", "d.rele": true}},
+        {"t": 14202, "rota": "avancar", "espera": {"d.rele": false, "d.rele_desligado_em": 14202}},
+        {"t": 14203, "rota": "status", "espera": {"fase": "OCIOSA", "modo": "MANUAL", "vigiando": false, "pan": "$pan0", "ultimo.resultado": "cancelada", "cooldown_restante_ms": 11998}},
+        {"t": 26100, "rota": "status", "espera": {"modo": "AUTO"}},
+        {"t": 26100, "macro": "janela", "sess": "S1"},
+        {"t": 26100, "rota": "comando", "sess": "S1", "corpo": {"acao": "disparar", "origem": "ia", "janela": "$S1_jc"}, "espera": {"resultado": "recusado", "motivo": "cooldown"}},
+        {"t": 26201, "macro": "janela", "sess": "S1"},
+        {"t": 26201, "rota": "comando", "sess": "S1", "corpo": {"acao": "disparar", "origem": "ia", "janela": "$S1_jc"}, "espera": {"resultado": "aceito"}}
+      ]
+    },
+    {
+      "nome": "cancelamento_no_auto_nao_seleciona_modo",
+      "requisito": "guarded-pump: Cancelar no automático desliga água; AUTO retoma sem interpretar o botão como modo",
+      "passos": [
+        {"t": 12100, "macro": "abrir", "sess": "S1"},
+        {"t": 12200, "rota": "comando", "sess": "S1", "corpo": {"acao": "disparar", "origem": "ia", "janela": "$S1_jc"}, "espera": {"resultado": "aceito"}},
+        {"t": 13000, "macro": "janela", "sess": "S1"},
+        {"t": 13000, "rota": "comando", "sess": "S1", "corpo": {"acao": "cancelar", "cancel_ate": "$ultimo", "janela": "$S1_jx"}, "espera": {"resultado": "aceito"}},
+        {"t": 13005, "rota": "status", "espera": {"modo": "AUTO", "vigiando": true, "bomba": false, "fase": "OCIOSA"}}
+      ]
+    },
+    {
+      "nome": "cancelar_em_repouso_aplica_inibicao",
+      "requisito": "guarded-pump: Cancelar em repouso mantém modo, invalida intenções e aplica inibição",
+      "passos": [
+        {"t": 12100, "macro": "abrir", "sess": "S1"},
+        {"t": 13000, "macro": "janela", "sess": "S1"},
+        {"t": 13000, "rota": "comando", "sess": "S1", "corpo": {"acao": "cancelar", "cancel_ate": "$ultimo", "janela": "$S1_jx"}, "espera": {"resultado": "aceito", "estado.modo": "AUTO", "estado.cooldown_restante_ms": 12000}},
+        {"t": 24900, "macro": "janela", "sess": "S1"},
+        {"t": 24900, "rota": "comando", "sess": "S1", "corpo": {"acao": "disparar", "origem": "ia", "janela": "$S1_jc"}, "espera": {"resultado": "recusado", "motivo": "cooldown"}},
+        {"t": 25000, "macro": "janela", "sess": "S1"},
+        {"t": 25000, "rota": "comando", "sess": "S1", "corpo": {"acao": "disparar", "origem": "ia", "janela": "$S1_jc"}, "espera": {"resultado": "aceito"}}
+      ]
+    },
+    {
+      "nome": "cancelar_disparo_com_ack_perdido",
+      "requisito": "guarded-pump: Cancelar disparo cujo ACK se perdeu, pela barreira cancel_through_sequence",
+      "passos": [
+        {"t": 12100, "macro": "abrir", "sess": "S1"},
+        {"t": 12200, "rota": "comando", "sess": "S1", "corpo": {"acao": "disparar", "origem": "ia", "janela": "$S1_jc"}, "ignorar_resposta": true},
+        {"t": 12300, "rota": "comando", "sess": "S1", "corpo": {"acao": "cancelar", "cancel_ate": "$ultimo", "janela": "$S1_jx"}, "espera": {"resultado": "aceito"}},
+        {"t": 12301, "rota": "avancar", "espera": {"d.rele": false, "d.rele_desligado_em": 12301}}
+      ]
+    },
+    {
+      "nome": "cancelar_pendente_antes_de_energizar",
+      "requisito": "design §4: intenção aceita antes da transição GPIO pode ser cancelada sem ligar o relé",
+      "passos": [
+        {"t": 12100, "macro": "abrir", "sess": "S1"},
+        {"t": 12200, "rota": "comando", "sess": "S1", "corpo": {"acao": "disparar", "origem": "ia", "janela": "$S1_jc"}, "espera": {"resultado": "aceito", "estado.fase": "ACEITA_PENDENTE"}},
+        {"t": 12200, "rota": "comando", "sess": "S1", "corpo": {"acao": "cancelar", "cancel_ate": "$ultimo", "janela": "$S1_jx"}, "espera": {"resultado": "aceito"}},
+        {"t": 12210, "rota": "status", "espera": {"fase": "OCIOSA", "ultimo.resultado": "cancelada", "d.rele": false, "d.rele_ligado_em": {"$nulo": true}}}
+      ]
+    },
+    {
+      "nome": "cancelamento_atrasado_nao_corta_acao_posterior",
+      "requisito": "guarded-pump: Cancelamento antigo após outra ação é recusado e não corta a nova",
+      "passos": [
+        {"t": 12100, "macro": "abrir", "sess": "S1"},
+        {"t": 12200, "rota": "comando", "sess": "S1", "corpo": {"acao": "disparar", "origem": "ia", "janela": "$S1_jc"}, "espera": {"resultado": "aceito"}, "capturar": {"seq_a1": "$S1_seq"}},
+        {"t": 24250, "macro": "janela", "sess": "S1"},
+        {"t": 24280, "rota": "comando", "sess": "S1", "corpo": {"seq": 50, "acao": "disparar", "origem": "ia", "janela": "$S1_jc"}, "espera": {"resultado": "aceito"}},
+        {"t": 24290, "rota": "comando", "sess": "S1", "corpo": {"seq": 49, "acao": "cancelar", "cancel_ate": 48, "janela": "$S1_jx"}, "espera": {"resultado": "recusado", "motivo": "seq_antiga"}},
+        {"t": 24300, "rota": "comando", "sess": "S1", "corpo": {"seq": 51, "acao": "cancelar", "cancel_ate": "$seq_a1", "janela": "$S1_jx"}, "espera": {"resultado": "recusado", "motivo": "alvo_obsoleto"}},
+        {"t": 24400, "rota": "avancar", "espera": {"d.rele": true}},
+        {"t": 24400, "rota": "status", "espera": {"fase": "ENERGIZADA"}}
+      ]
+    },
+    {
+      "nome": "movimento_atravessa_termino_natural",
+      "requisito": "arbitration: amostra gerada em t=4,9 durante água chega em t=5,1 -> rejeitada por epoch anterior",
+      "passos": [
+        {"t": 12100, "macro": "abrir", "sess": "S1"},
+        {"t": 12150, "rota": "comando", "sess": "S1", "corpo": {"acao": "manual", "janela": "$S1_jc"}, "capturar": {"pan0": "estado.pan", "epoch0": "estado.control_epoch"}},
+        {"t": 12200, "rota": "comando", "sess": "S1", "corpo": {"acao": "disparar", "origem": "operador", "janela": "$S1_jc"}, "espera": {"estado.control_epoch": {"$soma": ["$epoch0", 1]}}},
+        {"rota": "comando", "sess": "S1", "corpo": {"acao": "renovar", "janela": "$S1_jc"}, "repetir": {"de": 12400, "ate": 17150, "passo": 250}},
+        {"t": 17100, "macro": "janela", "sess": "S1", "capturar": {"jc_combate": "janela_c"}},
+        {"t": 17100, "rota": "comando", "sess": "S1", "corpo": {"acao": "mover", "vel": 1.0, "janela": "$jc_combate"}, "espera": {"resultado": "recusado", "motivo": "combate"}},
+        {"t": 17300, "rota": "comando", "sess": "S1", "corpo": {"acao": "mover", "vel": 1.0, "janela": "$jc_combate"}, "espera": {"resultado": "recusado", "motivo": "epoch_obsoleto", "estado.control_epoch": {"$soma": ["$epoch0", 2]}}},
+        {"t": 17310, "rota": "comando", "sess": "S1", "corpo": {"acao": "auto", "janela": "$jc_combate"}, "espera": {"resultado": "recusado", "motivo": "epoch_obsoleto"}},
+        {"t": 17500, "rota": "status", "espera": {"pan": "$pan0", "modo": "MANUAL"}},
+        {"t": 17500, "macro": "janela", "sess": "S1"},
+        {"t": 17500, "rota": "comando", "sess": "S1", "corpo": {"acao": "mover", "vel": 1.0, "janela": "$S1_jc"}, "espera": {"resultado": "aceito"}}
+      ]
+    },
+    {
+      "nome": "troca_de_modo_durante_agua_descartada",
+      "requisito": "arbitration: mover e trocar modo durante água não mudam alvo nem modo de retorno",
+      "passos": [
+        {"t": 12100, "macro": "abrir", "sess": "S1"},
+        {"t": 12150, "rota": "comando", "sess": "S1", "corpo": {"acao": "manual", "janela": "$S1_jc"}, "capturar": {"pan0": "estado.pan"}},
+        {"t": 12200, "rota": "comando", "sess": "S1", "corpo": {"acao": "disparar", "origem": "operador", "janela": "$S1_jc"}},
+        {"rota": "comando", "sess": "S1", "corpo": {"acao": "renovar", "janela": "$S1_jc"}, "repetir": {"de": 12400, "ate": 18400, "passo": 250}},
+        {"t": 13000, "macro": "janela", "sess": "S1"},
+        {"t": 13000, "rota": "comando", "sess": "S1", "corpo": {"acao": "auto", "janela": "$S1_jc"}, "espera": {"resultado": "recusado", "motivo": "combate"}},
+        {"t": 13001, "rota": "comando", "sess": "S1", "corpo": {"acao": "mover", "vel": -1.0, "janela": "$S1_jc"}, "espera": {"resultado": "recusado", "motivo": "combate"}},
+        {"t": 18500, "rota": "status", "espera": {"modo": "MANUAL", "pan": "$pan0", "vigiando": false}}
+      ]
+    },
+    {
+      "nome": "lease_expira_durante_agua_retorno_auto",
+      "requisito": "arbitration/guarded-pump: lease expira no meio do disparo -> mira congelada, termina pelo prazo, retorno AUTO",
+      "passos": [
+        {"t": 12100, "macro": "abrir", "sess": "S1"},
+        {"t": 12150, "rota": "comando", "sess": "S1", "corpo": {"acao": "manual", "janela": "$S1_jc"}, "capturar": {"pan0": "estado.pan"}},
+        {"t": 12200, "rota": "comando", "sess": "S1", "corpo": {"acao": "disparar", "origem": "operador", "janela": "$S1_jc"}},
+        {"t": 14000, "rota": "status", "espera": {"retorno_auto": true, "vigiando": false, "pan": "$pan0", "bomba": true}},
+        {"t": 17201, "rota": "avancar", "espera": {"d.rele_desligado_em": 17201}},
+        {"t": 17205, "rota": "status", "espera": {"modo": "AUTO", "vigiando": true, "retorno_auto": false}}
+      ]
+    },
+    {
+      "nome": "recuperacao_cancela_acao_de_s1",
+      "requisito": "arbitration: Cliente reinicia com água e ACK perdido -> S2 cancela somente A; nada restaurado",
+      "passos": [
+        {"t": 12100, "macro": "abrir", "sess": "S1", "open_id": "r1"},
+        {"t": 12150, "rota": "comando", "sess": "S1", "corpo": {"acao": "manual", "janela": "$S1_jc"}},
+        {"t": 12200, "rota": "comando", "sess": "S1", "corpo": {"id": "acao-A", "acao": "disparar", "origem": "operador", "janela": "$S1_jc"}, "ignorar_resposta": true},
+        {"t": 13000, "macro": "abrir", "sess": "S2", "open_id": "r2", "espera": {"resultado": "aceito", "estado_sessao": "RECUPERACAO", "acao_recuperar": "acao-A",
+          "janela_r": {"$naonulo": true}, "janela_c": {"$nulo": true}, "estado.retorno_auto": true}},
+        {"t": 13010, "macro": "janela", "sess": "S1", "espera": {"resultado": "recusado", "motivo": "sessao_obsoleta"}},
+        {"t": 13020, "rota": "comando", "sess": "S2", "corpo": {"acao": "manual", "janela": "$S2_jr"}, "espera": {"resultado": "recusado", "motivo": "recuperacao"}},
+        {"t": 13030, "rota": "comando", "sess": "S2", "corpo": {"acao": "disparar", "origem": "ia", "janela": "$S2_jr"}, "espera": {"resultado": "recusado", "motivo": "recuperacao"}},
+        {"t": 13040, "rota": "comando", "sess": "S2", "corpo": {"acao": "cancelar", "cancel_ate": "$ultimo", "janela": "$S2_jr"}, "espera": {"resultado": "recusado", "motivo": "recuperacao"}},
+        {"t": 13050, "macro": "janela", "sess": "S2", "espera": {"janela_r": {"$naonulo": true}, "janela_c": {"$nulo": true}}},
+        {"t": 13100, "rota": "comando", "sess": "S2", "corpo": {"acao": "cancelar", "alvo": "acao-A", "janela": "$S2_jr"}, "espera": {"resultado": "aceito"}},
+        {"t": 13101, "rota": "avancar", "espera": {"d.rele": false, "d.rele_desligado_em": 13101}},
+        {"t": 13105, "rota": "status", "espera": {"estado_sessao": "NORMAL", "modo": "AUTO", "sessao": "$S2", "fase": "OCIOSA", "ultimo.id": "acao-A", "ultimo.resultado": "cancelada"}},
+        {"t": 13110, "macro": "janela", "sess": "S2", "espera": {"janela_c": {"$naonulo": true}}},
+        {"t": 13110, "rota": "comando", "sess": "S2", "corpo": {"acao": "mover", "vel": 1.0, "janela": "$S2_jc"}, "espera": {"resultado": "recusado", "motivo": "modo_auto"}}
+      ]
+    },
+    {
+      "nome": "recuperacao_handshake_repetido_sem_prolongar",
+      "requisito": "arbitration: repetir session_open_id não troca de sessão novamente nem prolonga A",
+      "passos": [
+        {"t": 12100, "macro": "abrir", "sess": "S1"},
+        {"t": 12200, "rota": "comando", "sess": "S1", "corpo": {"id": "acao-A", "acao": "disparar", "origem": "ia", "janela": "$S1_jc"}},
+        {"t": 13000, "macro": "abrir", "sess": "S2", "open_id": "r2"},
+        {"t": 13100, "repetir_passo": 2, "espera": {"resultado": "aceito", "duplicado": true, "sessao": "$S2", "estado_sessao": "RECUPERACAO", "acao_recuperar": "acao-A"}},
+        {"t": 13200, "macro": "abrir", "sess": "S3", "open_id": "r3", "espera": {"estado_sessao": "RECUPERACAO", "acao_recuperar": "acao-A"}},
+        {"t": 13210, "macro": "janela", "sess": "S2", "espera": {"resultado": "recusado", "motivo": "sessao_obsoleta"}},
+        {"t": 17201, "rota": "avancar", "espera": {"d.rele_desligado_em": 17201}},
+        {"t": 17205, "rota": "status", "espera": {"sessao": "$S3", "estado_sessao": "NORMAL", "modo": "AUTO"}}
+      ]
+    },
+    {
+      "nome": "recuperacao_capacidade_atrasada_nao_alcanca_acao_futura",
+      "requisito": "arbitration: Cancelamento de recuperação chega após A terminar -> não corta nem autoriza outra ação",
+      "passos": [
+        {"t": 12100, "macro": "abrir", "sess": "S1"},
+        {"t": 12200, "rota": "comando", "sess": "S1", "corpo": {"id": "acao-A", "acao": "disparar", "origem": "ia", "janela": "$S1_jc"}},
+        {"t": 17000, "macro": "abrir", "sess": "S2", "espera": {"estado_sessao": "RECUPERACAO"}, "capturar": {"jr_velha": "janela_r"}},
+        {"t": 17300, "rota": "comando", "sess": "S2", "corpo": {"acao": "cancelar", "alvo": "acao-A", "janela": "$jr_velha"}, "espera": {"resultado": "recusado", "motivo": "alvo_obsoleto", "estado.estado_sessao": "NORMAL"}},
+        {"t": 24201, "macro": "janela", "sess": "S2"},
+        {"t": 24201, "rota": "comando", "sess": "S2", "corpo": {"acao": "disparar", "origem": "ia", "janela": "$S2_jc"}, "espera": {"resultado": "aceito"}},
+        {"t": 24300, "rota": "comando", "sess": "S2", "corpo": {"acao": "cancelar", "alvo": "acao-A", "janela": "$jr_velha"}, "espera": {"resultado": "recusado"}},
+        {"t": 24400, "rota": "avancar", "espera": {"d.rele": true}}
+      ]
+    },
+    {
+      "nome": "takeover_com_acao_aceita_pendente",
+      "requisito": "guarded-pump: Takeover antes do GPIO energizar -> RECUPERACAO; cancelamento impede o início",
+      "passos": [
+        {"t": 12100, "macro": "abrir", "sess": "S1"},
+        {"t": 12200, "rota": "comando", "sess": "S1", "corpo": {"id": "acao-P", "acao": "disparar", "origem": "ia", "janela": "$S1_jc"}},
+        {"t": 12200, "macro": "abrir", "sess": "S2", "espera": {"estado_sessao": "RECUPERACAO", "acao_recuperar": "acao-P", "estado.fase": "ACEITA_PENDENTE"}},
+        {"t": 12200, "rota": "comando", "sess": "S2", "corpo": {"acao": "disparar", "origem": "ia", "janela": "$S2_jr"}, "espera": {"resultado": "recusado", "motivo": "recuperacao"}},
+        {"t": 12200, "rota": "comando", "sess": "S2", "corpo": {"acao": "cancelar", "alvo": "acao-P", "janela": "$S2_jr"}, "espera": {"resultado": "aceito"}},
+        {"t": 12210, "rota": "status", "espera": {"fase": "OCIOSA", "estado_sessao": "NORMAL", "d.rele": false, "d.rele_ligado_em": {"$nulo": true}}}
+      ]
+    },
+    {
+      "nome": "perfil_protegido_bloqueia_letras_legadas",
+      "requisito": "arbitration: Letra antiga chega após perda do controle -> rejeitada; perfil não volta a COMPAT",
+      "passos": [
+        {"t": 12100, "macro": "abrir", "sess": "S1"},
+        {"t": 12200, "rota": "comando", "sess": "S1", "corpo": {"acao": "manual", "janela": "$S1_jc"}},
+        {"t": 14000, "rota": "status", "espera": {"modo": "AUTO", "perfil": "PROTEGIDO"}},
+        {"t": 14010, "rota": "cmd", "letra": "F", "espera": {"http": 403, "texto_contem": "perfil_protegido"}},
+        {"t": 14020, "rota": "cmd", "letra": "B", "espera": {"http": 403}},
+        {"t": 14030, "rota": "cmd", "letra": "X", "espera": {"http": 403}},
+        {"t": 14040, "rota": "cmd", "letra": "V", "espera": {"http": 403}},
+        {"t": 14050, "rota": "cmd", "letra": "L", "espera": {"http": 403}},
+        {"t": 14060, "rota": "cmd", "letra": "4", "espera": {"http": 403}},
+        {"t": 14070, "rota": "serial", "letra": "F", "espera": {"texto_contem": "perfil_protegido"}},
+        {"t": 14080, "rota": "serial", "letra": "B", "espera": {"texto_contem": "perfil_protegido"}},
+        {"t": 14090, "rota": "cmd", "letra": "H", "espera": {"http": 200}},
+        {"t": 14200, "rota": "status", "espera": {"perfil": "PROTEGIDO", "fogo": false, "d.rele": false, "d.rele_ligado_em": {"$nulo": true}}}
+      ]
+    },
+    {
+      "nome": "compat_letras_passam_pelo_guardiao",
+      "requisito": "arbitration/guarded-pump: COMPAT anterior à negociação; F/B repetidos não reiniciam timer; cooldown comum",
+      "passos": [
+        {"t": 100, "rota": "cmd", "letra": "B", "espera": {"http": 200, "texto_contem": "cooldown"}},
+        {"t": 105, "rota": "avancar", "espera": {"d.rele": false}},
+        {"t": 12100, "rota": "cmd", "letra": "B", "espera": {"http": 200, "texto_contem": "ok"}},
+        {"t": 12101, "rota": "avancar", "espera": {"d.rele": true, "d.rele_ligado_em": 12101}},
+        {"t": 13000, "rota": "cmd", "letra": "B", "espera": {"texto_contem": "ocupado"}},
+        {"t": 13500, "rota": "cmd", "letra": "F", "espera": {"texto_contem": "ocupado"}},
+        {"t": 13600, "rota": "serial", "letra": "B", "espera": {"texto_contem": "ocupado"}},
+        {"t": 17101, "rota": "avancar", "espera": {"d.rele": false, "d.rele_desligado_em": 17101}},
+        {"t": 18000, "rota": "cmd", "letra": "F", "espera": {"texto_contem": "cooldown"}},
+        {"t": 18001, "rota": "status", "espera": {"fogo": true, "vigiando": false, "bomba": false, "perfil": "COMPAT"}},
+        {"t": 24101, "rota": "cmd", "letra": "F", "espera": {"texto_contem": "ok"}},
+        {"t": 24102, "rota": "avancar", "espera": {"d.rele": true}}
+      ]
+    },
+    {
+      "nome": "compat_x_cancela_com_inibicao_e_retoma",
+      "requisito": "design §1/§4: X na variante corta pela proteção, aplica inibição e retoma varredura",
+      "passos": [
+        {"t": 12100, "rota": "cmd", "letra": "B"},
+        {"t": 13000, "rota": "cmd", "letra": "X", "espera": {"http": 200}},
+        {"t": 13001, "rota": "avancar", "espera": {"d.rele": false, "d.rele_desligado_em": 13001}},
+        {"t": 13002, "rota": "status", "espera": {"vigiando": true, "fogo": false}},
+        {"t": 24200, "rota": "cmd", "letra": "B", "espera": {"texto_contem": "cooldown"}},
+        {"t": 25000, "rota": "cmd", "letra": "B", "espera": {"texto_contem": "ok"}}
+      ]
+    },
+    {
+      "nome": "compat_movimento_durante_agua_nao_altera_alvo",
+      "requisito": "design §3: ao rejeitar movimento durante água o firmware não atualiza o alvo PAN",
+      "passos": [
+        {"t": 11000, "rota": "cmd", "letra": "C", "espera": {"http": 200}},
+        {"t": 12100, "rota": "cmd", "letra": "B"},
+        {"t": 12200, "rota": "status", "espera": {"pan": 90}},
+        {"t": 12500, "rota": "cmd", "letra": "L", "espera": {"texto_contem": "combate"}},
+        {"t": 17200, "rota": "status", "espera": {"pan": 90}},
+        {"t": 17300, "rota": "status", "espera": {"pan": 90, "bomba": false}}
+      ]
+    },
+    {
+      "nome": "compat_sessao_recusada_com_agua_legada",
+      "requisito": "arbitration: Negociar com ação legada ainda ativa -> recusado até terminar",
+      "passos": [
+        {"t": 12100, "rota": "cmd", "letra": "B"},
+        {"t": 12500, "macro": "abrir", "sess": "S1", "espera": {"resultado": "recusado", "motivo": "agua_legada_ativa"}},
+        {"t": 12510, "rota": "status", "espera": {"perfil": "COMPAT", "sessao": {"$nulo": true}}},
+        {"t": 17200, "macro": "abrir", "sess": "S2", "espera": {"resultado": "aceito", "estado.perfil": "PROTEGIDO"}}
+      ]
+    },
+    {
+      "nome": "esquema_estrito_sem_efeito_lateral",
+      "requisito": "arbitration: validação estrita; mensagem inválida não renova lease",
+      "passos": [
+        {"t": 100, "macro": "abrir", "sess": "S1"},
+        {"t": 200, "rota": "comando", "sess": "S1", "corpo": {"acao": "manual", "janela": "$S1_jc"}},
+        {"t": 300, "rota": "comando", "corpo_bruto": "{\"v\":1,", "espera": {"http": 400, "resultado": "recusado", "motivo": "json_invalido"}},
+        {"t": 310, "rota": "comando", "sess": "S1", "corpo": {"acao": "renovar", "janela": "$S1_jc", "extra": 1}, "espera": {"http": 400, "motivo": "campo_desconhecido"}},
+        {"t": 320, "rota": "comando", "sess": "S1", "corpo": {"acao": "renovar", "janela": "$S1_jc", "seq": "7"}, "espera": {"motivo": "tipo_invalido"}},
+        {"t": 330, "rota": "comando", "sess": "S1", "corpo": {"acao": "pular", "seq": 90, "id": "x", "janela": "$S1_jc"}, "espera": {"motivo": "acao_desconhecida"}},
+        {"t": 340, "rota": "comando", "sess": "S1", "corpo": {"acao": "disparar", "janela": "$S1_jc"}, "espera": {"motivo": "campo_ausente"}},
+        {"t": 350, "rota": "comando", "sess": "S1", "corpo": {"acao": "mover", "vel": 1.5, "janela": "$S1_jc"}, "espera": {"motivo": "valor_invalido"}},
+        {"t": 360, "rota": "comando", "sess": "S1", "corpo": {"acao": "renovar", "id": "com espaco", "janela": "$S1_jc"}, "espera": {"motivo": "valor_invalido"}},
+        {"t": 370, "rota": "comando", "sess": "S1", "corpo": {"acao": "disparar", "origem": "drone", "janela": "$S1_jc"}, "espera": {"motivo": "valor_invalido"}},
+        {"t": 380, "rota": "comando", "sess": "S1", "corpo": {"acao": "cancelar", "janela": "$S1_jx"}, "espera": {"motivo": "campo_ausente"}},
+        {"t": 390, "rota": "comando", "sess": "S1", "corpo": {"acao": "cancelar", "cancel_ate": 1, "alvo": "x", "janela": "$S1_jx"}, "espera": {"motivo": "valor_invalido"}},
+        {"t": 400, "rota": "comando", "sess": "S1", "corpo": {"acao": "renovar", "janela": "$S1_jx"}, "espera": {"motivo": "escopo"}},
+        {"t": 410, "rota": "comando", "corpo_bruto": "{\"v\":1,\"v\":1}", "espera": {"motivo": "json_invalido"}},
+        {"t": 420, "rota": "comando", "corpo_bruto": "{\"v\":1,\"o\":{\"a\":1}}", "espera": {"motivo": "json_invalido"}},
+        {"t": 1750, "rota": "status", "espera": {"modo": "AUTO"}}
+      ]
+    },
+    {
+      "nome": "sequencia_e_identidade_de_comando",
+      "requisito": "arbitration: Mesmo ID com conteúdo diferente; pacote antigo; duplicata devolve decisão original",
+      "passos": [
+        {"t": 100, "macro": "abrir", "sess": "S1"},
+        {"t": 200, "rota": "comando", "sess": "S1", "corpo": {"seq": 5, "id": "m1", "acao": "manual", "janela": "$S1_jc"}, "espera": {"resultado": "aceito"}},
+        {"t": 210, "repetir_passo": 1, "espera": {"resultado": "aceito", "duplicado": true}},
+        {"t": 220, "rota": "comando", "sess": "S1", "corpo": {"seq": 5, "id": "m1", "acao": "auto", "janela": "$S1_jc"}, "espera": {"resultado": "recusado", "motivo": "id_conflito"}},
+        {"t": 230, "rota": "comando", "sess": "S1", "corpo": {"seq": 4, "id": "m0", "acao": "auto", "janela": "$S1_jc"}, "espera": {"resultado": "recusado", "motivo": "seq_antiga"}},
+        {"t": 240, "rota": "status", "espera": {"modo": "MANUAL"}},
+        {"t": 250, "rota": "comando", "sess": "S1", "corpo": {"acao": "consultar", "ref": "m1"}, "espera": {"resultado": "aceito", "ref_resultado": "aceito", "ref_acao": "manual"}},
+        {"t": 260, "rota": "comando", "sess": "S1", "corpo": {"acao": "consultar", "ref": "nunca"}, "espera": {"ref_resultado": "desconhecido"}}
+      ]
+    },
+    {
+      "nome": "retencao_dedup_expirada_sem_replay",
+      "requisito": "arbitration: resultado expirado sem replay; ID não reconciliável permanece desconhecido",
+      "passos": [
+        {"t": 12100, "macro": "abrir", "sess": "S1"},
+        {"t": 12200, "rota": "comando", "sess": "S1", "corpo": {"id": "velho", "acao": "disparar", "origem": "ia", "janela": "$S1_jc"}, "espera": {"resultado": "aceito"}},
+        {"t": 140000, "rota": "comando", "sess": "S1", "corpo": {"acao": "consultar", "ref": "velho"}, "espera": {"ref_resultado": "desconhecido"}},
+        {"t": 140100, "repetir_passo": 1, "espera": {"resultado": "recusado", "motivo": "seq_antiga", "d.rele": false}}
+      ]
+    },
+    {
+      "nome": "rollover_do_relogio_monotonico",
+      "requisito": "tasks 3.7: fronteiras/rollover do relógio de 32 bits",
+      "t0": 4294954296,
+      "passos": [
+        {"t": 12100, "macro": "abrir", "sess": "S1"},
+        {"t": 12150, "rota": "comando", "sess": "S1", "corpo": {"acao": "manual", "janela": "$S1_jc"}},
+        {"t": 12200, "rota": "comando", "sess": "S1", "corpo": {"acao": "disparar", "origem": "operador", "janela": "$S1_jc"}, "espera": {"resultado": "aceito"}},
+        {"rota": "comando", "sess": "S1", "corpo": {"acao": "renovar", "janela": "$S1_jc"}, "repetir": {"de": 12400, "ate": 13400, "passo": 250}},
+        {"t": 13500, "rota": "status", "espera": {"modo": "MANUAL", "bomba": true}},
+        {"t": 17201, "rota": "avancar", "espera": {"d.rele_ligado_em": 12201, "d.rele_desligado_em": 17201}},
+        {"t": 17300, "rota": "status", "espera": {"modo": "AUTO", "cooldown_restante_ms": 6901}}
+      ]
+    },
+    {
+      "nome": "falha_ao_criar_protecao_recusa_toda_agua",
+      "requisito": "guarded-pump: Falha ao criar a tarefa de proteção -> relé desligado e pedidos recusados",
+      "falha_protecao": true,
+      "passos": [
+        {"t": 10, "rota": "status", "espera": {"protecao_ok": false, "bomba": false}},
+        {"t": 12100, "rota": "cmd", "letra": "B", "espera": {"texto_contem": "protecao_indisponivel"}},
+        {"t": 12200, "macro": "abrir", "sess": "S1"},
+        {"t": 12300, "rota": "comando", "sess": "S1", "corpo": {"acao": "disparar", "origem": "ia", "janela": "$S1_jc"}, "espera": {"resultado": "recusado", "motivo": "protecao_indisponivel"}},
+        {"t": 12400, "rota": "avancar", "espera": {"d.rele": false, "d.rele_ligado_em": {"$nulo": true}}}
+      ]
+    }
+  ]
+}

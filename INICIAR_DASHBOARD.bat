@@ -10,7 +10,9 @@ rem  alimenta e abre no navegador em http://localhost:8060
 rem  Pode rodar junto com o INICIAR_VIGIA.bat.
 rem ==============================================================
 
-set PROJ=C:\projetos\deteccao-fogo
+set PROJ=%~dp0
+if "%PROJ:~-1%"=="\" set PROJ=%PROJ:~0,-1%
+if not exist "%PROJ%\venv\Scripts\python.exe" set PROJ=C:\projetos\deteccao-fogo
 set PY=%PROJ%\venv\Scripts\python.exe
 
 echo ======================================================================

@@ -1,0 +1,55 @@
+﻿diff --git a/.gitignore b/.gitignore
+index cb89ce5..9fa82a6 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -15,3 +15,5 @@ yolov8n.pt
+ modelos/best.pt
+ modelos/.cache/
+ .vscode/
++.tmp/
++tmp*/
+diff --git a/INICIAR_DASHBOARD.bat b/INICIAR_DASHBOARD.bat
+index f148aec..2949c35 100644
+--- a/INICIAR_DASHBOARD.bat
++++ b/INICIAR_DASHBOARD.bat
+@@ -10,7 +10,9 @@ rem  alimenta e abre no navegador em http://localhost:8060
+ rem  Pode rodar junto com o INICIAR_VIGIA.bat.
+ rem ==============================================================
+ 
+-set PROJ=C:\projetos\deteccao-fogo
++set PROJ=%~dp0
++if "%PROJ:~-1%"=="\" set PROJ=%PROJ:~0,-1%
++if not exist "%PROJ%\venv\Scripts\python.exe" set PROJ=C:\projetos\deteccao-fogo
+ set PY=%PROJ%\venv\Scripts\python.exe
+ 
+ echo ======================================================================
+diff --git a/INICIAR_VIGIA.bat b/INICIAR_VIGIA.bat
+index 2d3bfab..4af5f12 100644
+--- a/INICIAR_VIGIA.bat
++++ b/INICIAR_VIGIA.bat
+@@ -13,7 +13,9 @@ rem ==============================================================
+ 
+ set IP_S3=192.168.0.17
+ 
+-set PROJ=C:\projetos\deteccao-fogo
++set PROJ=%~dp0
++if "%PROJ:~-1%"=="\" set PROJ=%PROJ:~0,-1%
++if not exist "%PROJ%\venv\Scripts\python.exe" set PROJ=C:\projetos\deteccao-fogo
+ set PY=%PROJ%\venv\Scripts\python.exe
+ 
+ echo ======================================================================
+diff --git a/VER_GRAVACOES.bat b/VER_GRAVACOES.bat
+index 512a4d6..bf84cd9 100644
+--- a/VER_GRAVACOES.bat
++++ b/VER_GRAVACOES.bat
+@@ -10,7 +10,9 @@ rem  cada uma tem chama. Nao dispara nada e nao grava nada.
+ rem  Use para escolher qual gravacao usar no video.
+ rem ==============================================================
+ 
+-set PROJ=C:\projetos\deteccao-fogo
++set PROJ=%~dp0
++if "%PROJ:~-1%"=="\" set PROJ=%PROJ:~0,-1%
++if not exist "%PROJ%\venv\Scripts\python.exe" set PROJ=C:\projetos\deteccao-fogo
+ set PY=%PROJ%\venv\Scripts\python.exe
+ 
+ echo ======================================================================

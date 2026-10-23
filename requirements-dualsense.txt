@@ -1,0 +1,5 @@
+# Dependencia OPCIONAL do controle DualSense (sistema_vigia.py --controle-dualsense).
+# Instale somente no venv do projeto:
+#   .\venv\Scripts\python.exe -m pip install -r requirements-dualsense.txt
+# Versao medida com o DualSense USB (054C:0CE6) no diagnostico. SDL nao e usado.
+hidapi==0.15.0

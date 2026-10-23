@@ -1,0 +1,14 @@
+{
+  "revision": "R2",
+  "purpose": "Identificar os documentos substantivos enviados à reavaliação; pareceres e aprovação humana constam em REVIEW.md, excluído deste manifesto administrativo.",
+  "files": [
+    { "file": "CONTEXT.md", "sha256": "EA1A192E5E3C27AFF996C9C0CC1F4D2909C43FCBDC65D15DBC8F769232B398AE" },
+    { "file": "openspec/changes/controle-dualsense-vigia/README.md", "sha256": "C502BCFE2145A60AF308EF632857558AA4B8B5535F3398327C51947D09F7552F" },
+    { "file": "openspec/changes/controle-dualsense-vigia/proposal.md", "sha256": "B73436E3E40EA3E6906302034379AA7BEF1C9348FBACE74C77475372BB6EE0EF" },
+    { "file": "openspec/changes/controle-dualsense-vigia/design.md", "sha256": "178145E1CE7B2AE7AD5AF511ACAC099702FB5BBAA12D58A2C79FDAF8D1B58BC5" },
+    { "file": "openspec/changes/controle-dualsense-vigia/tasks.md", "sha256": "E349156FC1A4907E31399C874149572066382784AFF7CAD5AC640A77E3E0E4BD" },
+    { "file": "openspec/changes/controle-dualsense-vigia/specs/dualsense-input/spec.md", "sha256": "15397EE9EC45A1B819C1E8D13D4A2EB9F58E6DB152FE80D1263217D00F66A102" },
+    { "file": "openspec/changes/controle-dualsense-vigia/specs/vigia-control-arbitration/spec.md", "sha256": "8D51E56FCD77845BADCBD3E81BD0BEE27481EC832C824F024BDD70256228F292" },
+    { "file": "openspec/changes/controle-dualsense-vigia/specs/guarded-pump/spec.md", "sha256": "77EEC862F452EA1306460DD78970BD8BDC8B6E414E86EA4D4E1DCE69C9BF3B45" }
+  ]
+}

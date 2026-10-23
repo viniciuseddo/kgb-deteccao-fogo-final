@@ -15,3 +15,8 @@ yolov8n.pt
 modelos/best.pt
 modelos/.cache/
 .vscode/
+.tmp/
+tmp*/
+arduino/**/build/
+**/segredos_wifi.h
+**/segredos_wifi.json

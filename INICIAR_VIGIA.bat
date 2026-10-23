@@ -13,7 +13,9 @@ rem ==============================================================
 
 set IP_S3=192.168.0.17
 
-set PROJ=C:\projetos\deteccao-fogo
+set PROJ=%~dp0
+if "%PROJ:~-1%"=="\" set PROJ=%PROJ:~0,-1%
+if not exist "%PROJ%\venv\Scripts\python.exe" set PROJ=C:\projetos\deteccao-fogo
 set PY=%PROJ%\venv\Scripts\python.exe
 
 echo ======================================================================
